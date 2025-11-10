@@ -1,0 +1,74 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+pthread_mutex_t mutex;      // To protect read_count
+sem_t wrt;                  // Semaphore for writer access
+int read_count = 0;         // Number of active readers
+int data = 0;               // Shared data
+
+void *reader(void *arg) {
+    int id = *(int *)arg;
+    while (1) {
+        // Entry Section
+        pthread_mutex_lock(&mutex);
+        read_count++;
+        if (read_count == 1)
+            sem_wait(&wrt);   // First reader locks the writer
+        pthread_mutex_unlock(&mutex);
+
+        // Critical Section (Reading)
+        printf("📖 Reader %d: read data = %d\n", id, data);
+        sleep(1);
+
+        // Exit Section
+        pthread_mutex_lock(&mutex);
+        read_count--;
+        if (read_count == 0)
+            sem_post(&wrt);   // Last reader unlocks the writer
+        pthread_mutex_unlock(&mutex);
+
+        sleep(1);
+    }
+}
+
+void *writer(void *arg) {
+    int id = *(int *)arg;
+    while (1) {
+        sem_wait(&wrt);      // Wait until no readers
+        data++;              // Critical Section (Writing)
+        printf("✍️ Writer %d: wrote data = %d\n", id, data);
+        sleep(1);
+        sem_post(&wrt);      // Release write lock
+        sleep(2);
+    }
+}
+
+int main() {
+    pthread_t rtid[3], wtid[2];
+    int r[3] = {1, 2, 3};
+    int w[2] = {1, 2};
+
+    pthread_mutex_init(&mutex, NULL);
+    sem_init(&wrt, 0, 1);
+
+    // Create reader threads
+    for (int i = 0; i < 3; i++)
+        pthread_create(&rtid[i], NULL, reader, &r[i]);
+
+    // Create writer threads
+    for (int i = 0; i < 2; i++)
+        pthread_create(&wtid[i], NULL, writer, &w[i]);
+
+    // Join threads (infinite loop, optional)
+    for (int i = 0; i < 3; i++)
+        pthread_join(rtid[i], NULL);
+    for (int i = 0; i < 2; i++)
+        pthread_join(wtid[i], NULL);
+
+    pthread_mutex_destroy(&mutex);
+    sem_destroy(&wrt);
+
+    return 0;
+}

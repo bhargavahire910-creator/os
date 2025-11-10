@@ -1,0 +1,59 @@
+writer.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // Generate unique key
+    key_t key = ftok("shmfile", 65);
+
+    // Create shared memory (size = 1024 bytes)
+    int shmid = shmget(key, 1024, 0666 | IPC_CREAT);
+
+    // Attach shared memory to process address space
+    char *str = (char *) shmat(shmid, NULL, 0);
+
+    printf("Enter some text: ");
+    fgets(str, 1024, stdin);
+
+    printf("Data written to shared memory.\n");
+
+    // Detach
+    shmdt(str);
+
+    return 0;
+}
+
+reader.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // Generate same key
+    key_t key = ftok("shmfile", 65);
+
+    // Locate shared memory created by writer
+    int shmid = shmget(key, 1024, 0666);
+
+    // Attach shared memory to process address space
+    char *str = (char *) shmat(shmid, NULL, 0);
+
+    printf("Data read from shared memory: %s\n", str);
+
+    // Detach and destroy
+    shmdt(str);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    return 0;
+}
+gcc writer.c -o writer
+gcc reader.c -o reader
+./writer
+./reader

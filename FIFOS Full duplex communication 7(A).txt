@@ -1,0 +1,92 @@
+writer.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int main() {
+    char input[200], output[200];
+    int fd1, fd2;
+
+    // Open FIFOs
+    fd1 = open("fifo1", O_WRONLY);
+    fd2 = open("fifo2", O_RDONLY);
+
+    // Accept sentence from user
+    printf("Enter a sentence: ");
+    fgets(input, sizeof(input), stdin);
+
+    // Write to fifo1
+    write(fd1, input, sizeof(input));
+
+    // Read result from fifo2
+    read(fd2, output, sizeof(output));
+
+    printf("\n--- Result from Process 2 ---\n");
+    printf("%s\n", output);
+
+    close(fd1);
+    close(fd2);
+    return 0;
+}
+
+reader.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int main() {
+    char input[200], result[200];
+    int fd1, fd2;
+    FILE *fp;
+    int chars = 0, words = 0, lines = 0;
+
+    // Open FIFOs
+    fd1 = open("fifo1", O_RDONLY);
+    fd2 = open("fifo2", O_WRONLY);
+
+    // Read data from fifo1
+    read(fd1, input, sizeof(input));
+
+    // Count characters, words, lines
+    for (int i = 0; input[i] != '\0'; i++) {
+        if (input[i] != ' ' && input[i] != '\n')
+            chars++;
+        if (input[i] == ' ' || input[i] == '\n')
+            words++;
+        if (input[i] == '\n')
+            lines++;
+    }
+    lines++; // At least one line
+
+    // Write results to a file
+    fp = fopen("output.txt", "w");
+    fprintf(fp, "Characters: %d\nWords: %d\nLines: %d\n", chars, words, lines);
+    fclose(fp);
+
+    // Read content of file
+    fp = fopen("output.txt", "r");
+    fread(result, sizeof(char), sizeof(result), fp);
+    fclose(fp);
+
+    // Send result to fifo2
+    write(fd2, result, sizeof(result));
+
+    close(fd1);
+    close(fd2);
+    return 0;
+}
+
+gcc writer.c -o writer
+gcc reader.c -o reader
+mkfifo fifo1 fifo2
+
+Then open two terminals:
+Terminal 1:
+./reader
+
+Terminal 2:
+./writer
+reader.c
